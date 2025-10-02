@@ -1,0 +1,21 @@
+# Example environment configuration for Twilio Audio Downloader MCP Server
+
+# Server configuration
+TWILIO_HOST=localhost
+TWILIO_PORT=8001
+TWILIO_LOG_LEVEL=INFO
+
+# Twilio authentication (required for Twilio URLs)
+TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
+TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
+TWILIO_BASE_URL=https://api.twilio.com
+
+# Additional authentication credentials for other audio sources
+# Format: AUTH_<IDENTIFIER>=base_url|username:password
+
+# Example for a custom audio service:
+# AUTH_MYSERVICE=https://audio.myservice.com|username:password
+
+# Example for multiple services:
+# AUTH_SERVICE1=https://audio1.example.com|user1:pass1
+# AUTH_SERVICE2=https://audio2.example.com|user2:pass2
