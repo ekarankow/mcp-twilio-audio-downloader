@@ -70,7 +70,7 @@ RUN mkdir -p /app/logs /app/data && \
 USER twilio
 
 # Expose port
-EXPOSE 8001
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
@@ -78,7 +78,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 # Default environment variables
 ENV TWILIO_HOST=0.0.0.0
-ENV TWILIO_PORT=8001
+ENV TWILIO_PORT=8080
 ENV TWILIO_LOG_LEVEL=INFO
 
 # Default command

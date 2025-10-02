@@ -41,7 +41,7 @@ class TwilioConfig(BaseSettings):
     
     # Server settings
     host: str = "localhost"
-    port: int = 8001
+    port: int = 8080
     log_level: str = "INFO"
     
     # Twilio authentication
