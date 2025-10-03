@@ -134,120 +134,179 @@ def get_auth_for_url(url: str) -> Optional[tuple]:
     return None
 
 
+
 @mcp.tool()
 def download_twilio_audio(url: str) -> Dict[str, Any]:
     """
-    Download audio file from Twilio URL with authentication support.
-    
-    Args:
-        url (str): Twilio audio URL to download from
-        
-    Returns:
-        Dict[str, Any]: Response containing success status, base64 encoded audio data,
-                       filename, content type, size, and error message if failed
+    Download audio file from Twilio URL with authentication support and return as MCP blob content.
     """
     try:
         logger.info(f"Starting audio download from URL: {url}")
-        
-        # Validate URL format
+
         if not url.startswith(('http://', 'https://')):
             error_msg = "Only HTTP and HTTPS URLs are supported"
             logger.error(f"{error_msg}. Received URL: {url}")
-            return AudioDownloadResponse(
-                success=False,
-                error_message=error_msg
-            ).dict()
-        
-        # Validate URL structure
-        try:
-            parsed_url = urlparse(url)
-            if not parsed_url.netloc:
-                error_msg = f"Invalid URL format: {url}"
-                logger.error(error_msg)
-                return AudioDownloadResponse(
-                    success=False,
-                    error_message=error_msg
-                ).dict()
-        except Exception as e:
-            error_msg = f"Failed to parse URL {url}: {e}"
+            return {"success": False, "error_message": error_msg}
+
+        parsed_url = urlparse(url)
+        if not parsed_url.netloc:
+            error_msg = f"Invalid URL format: {url}"
             logger.error(error_msg)
-            return AudioDownloadResponse(
-                success=False,
-                error_message=error_msg
-            ).dict()
-        
-        # Get authentication for this URL
+            return {"success": False, "error_message": error_msg}
+
         auth = get_auth_for_url(url)
-        if auth:
-            logger.info(f"Using authentication for URL: {url}")
-        else:
-            logger.warning(f"No authentication configured for URL: {url}")
-        
-        # Download with authentication if available
-        logger.info(f"Initiating HTTP request to: {url}")
         response = requests.get(url, auth=auth, stream=True, timeout=30)
         response.raise_for_status()
-        
-        logger.info(f"HTTP response status: {response.status_code}")
+
         content_type = response.headers.get('content-type', 'application/octet-stream')
-        content_length = response.headers.get('content-length', 'unknown')
-        logger.info(f"Content type: {content_type}")
-        logger.info(f"Content length: {content_length}")
-        
-        # Determine file extension from content type
         file_extension = get_file_extension_from_content_type(content_type)
         filename = f"twilio_audio_{parsed_url.path.split('/')[-1]}{file_extension}"
-        
-        logger.info(f"Determined filename: {filename}")
-        
-        # Read all content into memory
+
         audio_data = b""
-        bytes_downloaded = 0
-        
         for chunk in response.iter_content(chunk_size=8192):
             if chunk:
                 audio_data += chunk
-                bytes_downloaded += len(chunk)
-        
-        logger.info(f"Successfully downloaded {bytes_downloaded} bytes")
-        
+
         if len(audio_data) == 0:
             error_msg = "Downloaded file is empty"
             logger.error(error_msg)
-            return AudioDownloadResponse(
-                success=False,
-                error_message=error_msg
-            ).dict()
-        
-        # Encode audio data as base64 for JSON transport
-        encoded_data = base64.b64encode(audio_data).decode('utf-8')
-        
-        logger.info(f"Successfully encoded {len(audio_data)} bytes as base64")
-        
-        return AudioDownloadResponse(
-            success=True,
-            data=encoded_data,
-            filename=filename,
-            content_type=content_type,
-            size_bytes=len(audio_data)
-        ).dict()
-        
+            return {"success": False, "error_message": error_msg}
+
+        # Return as MCP blob content
+        return {
+            "success": True,
+            "file": mcp.BlobContent(
+                content=audio_data,
+                filename=filename,
+                content_type=content_type
+            ),
+            "size_bytes": len(audio_data)
+        }
+
     except requests.exceptions.RequestException as e:
         error_msg = f"HTTP request failed for {url}: {e}"
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        return AudioDownloadResponse(
-            success=False,
-            error_message=error_msg
-        ).dict()
+        return {"success": False, "error_message": error_msg}
     except Exception as e:
         error_msg = f"Unexpected error downloading audio from {url}: {e}"
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        return AudioDownloadResponse(
-            success=False,
-            error_message=error_msg
-        ).dict()
+        return {"success": False, "error_message": error_msg}
+# Alternative version returning base64 encoded data (commented out)
+# def download_twilio_audio(url: str) -> Dict[str, Any]:
+#     """
+#     Download audio file from Twilio URL with authentication support.
+#
+#     Args:
+#         url (str): Twilio audio URL to download from
+#
+#     Returns:
+#         Dict[str, Any]: Response containing success status, base64 encoded audio data,
+#                        filename, content type, size, and error message if failed
+#     """
+#     try:
+#         logger.info(f"Starting audio download from URL: {url}")
+#
+#         # Validate URL format
+#         if not url.startswith(('http://', 'https://')):
+#             error_msg = "Only HTTP and HTTPS URLs are supported"
+#             logger.error(f"{error_msg}. Received URL: {url}")
+#             return AudioDownloadResponse(
+#                 success=False,
+#                 error_message=error_msg
+#             ).dict()
+#
+#         # Validate URL structure
+#         try:
+#             parsed_url = urlparse(url)
+#             if not parsed_url.netloc:
+#                 error_msg = f"Invalid URL format: {url}"
+#                 logger.error(error_msg)
+#                 return AudioDownloadResponse(
+#                     success=False,
+#                     error_message=error_msg
+#                 ).dict()
+#         except Exception as e:
+#             error_msg = f"Failed to parse URL {url}: {e}"
+#             logger.error(error_msg)
+#             return AudioDownloadResponse(
+#                 success=False,
+#                 error_message=error_msg
+#             ).dict()
+#
+#         # Get authentication for this URL
+#         auth = get_auth_for_url(url)
+#         if auth:
+#             logger.info(f"Using authentication for URL: {url}")
+#         else:
+#             logger.warning(f"No authentication configured for URL: {url}")
+#
+#         # Download with authentication if available
+#         logger.info(f"Initiating HTTP request to: {url}")
+#         response = requests.get(url, auth=auth, stream=True, timeout=30)
+#         response.raise_for_status()
+#
+#         logger.info(f"HTTP response status: {response.status_code}")
+#         content_type = response.headers.get('content-type', 'application/octet-stream')
+#         content_length = response.headers.get('content-length', 'unknown')
+#         logger.info(f"Content type: {content_type}")
+#         logger.info(f"Content length: {content_length}")
+#
+#         # Determine file extension from content type
+#         file_extension = get_file_extension_from_content_type(content_type)
+#         filename = f"twilio_audio_{parsed_url.path.split('/')[-1]}{file_extension}"
+#
+#         logger.info(f"Determined filename: {filename}")
+#
+#         # Read all content into memory
+#         audio_data = b""
+#         bytes_downloaded = 0
+#
+#         for chunk in response.iter_content(chunk_size=8192):
+#             if chunk:
+#                 audio_data += chunk
+#                 bytes_downloaded += len(chunk)
+#
+#         logger.info(f"Successfully downloaded {bytes_downloaded} bytes")
+#
+#         if len(audio_data) == 0:
+#             error_msg = "Downloaded file is empty"
+#             logger.error(error_msg)
+#             return AudioDownloadResponse(
+#                 success=False,
+#                 error_message=error_msg
+#             ).dict()
+#
+#         # Encode audio data as base64 for JSON transport
+#         encoded_data = base64.b64encode(audio_data).decode('utf-8')
+#
+#         logger.info(f"Successfully encoded {len(audio_data)} bytes as base64")
+#
+#         return AudioDownloadResponse(
+#             success=True,
+#             data=encoded_data,
+#             filename=filename,
+#             content_type=content_type,
+#             size_bytes=len(audio_data)
+#         ).dict()
+#
+#     except requests.exceptions.RequestException as e:
+#         error_msg = f"HTTP request failed for {url}: {e}"
+#         logger.error(error_msg)
+#         logger.error(f"Full traceback: {traceback.format_exc()}")
+#         return AudioDownloadResponse(
+#             success=False,
+#             error_message=error_msg
+#         ).dict()
+#     except Exception as e:
+#         error_msg = f"Unexpected error downloading audio from {url}: {e}"
+#         logger.error(error_msg)
+#         logger.error(f"Full traceback: {traceback.format_exc()}")
+#         return AudioDownloadResponse(
+#             success=False,
+#             error_message=error_msg
+#         ).dict()
 
 
 @mcp.tool()
