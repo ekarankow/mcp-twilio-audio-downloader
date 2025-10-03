@@ -18,6 +18,7 @@ import logging
 import sys
 import base64
 from mcp.server.fastmcp import FastMCP
+from mcp.server import types
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
@@ -136,7 +137,7 @@ def get_auth_for_url(url: str) -> Optional[tuple]:
 
 
 @mcp.tool()
-def download_twilio_audio(url: str) -> Dict[str, Any]:
+def download_twilio_audio(url: str):
     """
     Download audio file from Twilio URL with authentication support and return as MCP blob content.
     """
@@ -146,13 +147,13 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
         if not url.startswith(('http://', 'https://')):
             error_msg = "Only HTTP and HTTPS URLs are supported"
             logger.error(f"{error_msg}. Received URL: {url}")
-            return {"success": False, "error_message": error_msg}
+            return types.ToolResult(content=[], error_message=error_msg)
 
         parsed_url = urlparse(url)
         if not parsed_url.netloc:
             error_msg = f"Invalid URL format: {url}"
             logger.error(error_msg)
-            return {"success": False, "error_message": error_msg}
+            return types.ToolResult(content=[], error_message=error_msg)
 
         auth = get_auth_for_url(url)
         response = requests.get(url, auth=auth, stream=True, timeout=30)
@@ -170,30 +171,26 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
         if len(audio_data) == 0:
             error_msg = "Downloaded file is empty"
             logger.error(error_msg)
-            return {"success": False, "error_message": error_msg}
+            return types.ToolResult(content=[], error_message=error_msg)
 
-        # Return as MCP blob content
-        return {
-            "success": True,
-            "file": mcp.BlobContent(
-                content=audio_data,
-                filename=filename,
-                content_type=content_type
-            ),
-            "size_bytes": len(audio_data)
-        }
+        blob = types.BlobResourceContents(
+            uri=filename,
+            data=audio_data,
+            mime_type=content_type
+        )
+        embedded = types.EmbeddedResource(resource=blob)
+        return types.ToolResult(content=[embedded])
 
     except requests.exceptions.RequestException as e:
         error_msg = f"HTTP request failed for {url}: {e}"
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        return {"success": False, "error_message": error_msg}
+        return types.ToolResult(content=[], error_message=error_msg)
     except Exception as e:
         error_msg = f"Unexpected error downloading audio from {url}: {e}"
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        return {"success": False, "error_message": error_msg}
-# Alternative version returning base64 encoded data (commented out)
+        return types.ToolResult(content=[], error_message=error_msg)# Alternative version returning base64 encoded data (commented out)
 # def download_twilio_audio(url: str) -> Dict[str, Any]:
 #     """
 #     Download audio file from Twilio URL with authentication support.
