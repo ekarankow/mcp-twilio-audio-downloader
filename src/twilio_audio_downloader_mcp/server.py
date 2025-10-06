@@ -19,7 +19,7 @@ import sys
 import base64
 from mcp.server.fastmcp import FastMCP
 from mcp.types import BlobResourceContents, EmbeddedResource
-from pydantic import BaseModel
+from pydantic import BaseModel, FileUrl
 from pydantic_settings import BaseSettings
 
 # Configure logging
@@ -234,12 +234,15 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
         # ).dict()
 
         blob = BlobResourceContents(
-            uri="file://{0}".format(filename),
+            uri=FileUrl(f"file://{filename}"),
             blob=encoded_data,
             mimeType=content_type
         )
 
-        return EmbeddedResource(resource=blob)
+        return EmbeddedResource(
+            type="resource",
+            resource=blob
+        ).dict()
 
     except requests.exceptions.RequestException as e:
         error_msg = f"HTTP request failed for {url}: {e}"
