@@ -21,6 +21,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import BlobResourceContents, EmbeddedResource
 from pydantic import BaseModel, FileUrl
 from pydantic_settings import BaseSettings
+from typing import Tuple, List
 
 # Configure logging
 logging.basicConfig(
@@ -136,7 +137,7 @@ def get_auth_for_url(url: str) -> Optional[tuple]:
 
 
 @mcp.tool()
-def download_twilio_audio(url: str):
+def download_twilio_audio(url: str) -> Tuple[str, list]:
     """
     Download audio file from Twilio URL with authentication support.
 
@@ -154,10 +155,11 @@ def download_twilio_audio(url: str):
         if not url.startswith(('http://', 'https://')):
             error_msg = "Only HTTP and HTTPS URLs are supported"
             logger.error(f"{error_msg}. Received URL: {url}")
-            return AudioDownloadResponse(
-                success=False,
-                error_message=error_msg
-            )
+            raise RuntimeError(error_msg)
+            # return AudioDownloadResponse(
+            #     success=False,
+            #     error_message=error_msg
+            # ), []
 
         # Validate URL structure
         try:
@@ -165,17 +167,19 @@ def download_twilio_audio(url: str):
             if not parsed_url.netloc:
                 error_msg = f"Invalid URL format: {url}"
                 logger.error(error_msg)
-                return AudioDownloadResponse(
-                    success=False,
-                    error_message=error_msg
-                )
+                raise RuntimeError(error_msg)
+                # return AudioDownloadResponse(
+                #     success=False,
+                #     error_message=error_msg
+                # )
         except Exception as e:
             error_msg = f"Failed to parse URL {url}: {e}"
             logger.error(error_msg)
-            return AudioDownloadResponse(
-                success=False,
-                error_message=error_msg
-            )
+            raise RuntimeError(error_msg)
+            # return AudioDownloadResponse(
+            #     success=False,
+            #     error_message=error_msg
+            # )
 
         # Get authentication for this URL
         auth = get_auth_for_url(url)
@@ -215,10 +219,11 @@ def download_twilio_audio(url: str):
         if len(audio_data) == 0:
             error_msg = "Downloaded file is empty"
             logger.error(error_msg)
-            return AudioDownloadResponse(
-                success=False,
-                error_message=error_msg
-            )
+            raise RuntimeError(error_msg)
+            # return AudioDownloadResponse(
+            #     success=False,
+            #     error_message=error_msg
+            # )
 
         # Encode audio data as base64 for JSON transport
         encoded_data = base64.b64encode(audio_data).decode('utf-8')
@@ -239,27 +244,27 @@ def download_twilio_audio(url: str):
             mimeType=content_type
         )
 
-        return EmbeddedResource(
-            type="resource",
-            resource=blob
-        )
+        resource = EmbeddedResource(type="resource", resource=blob)
+        return [filename, resource]
 
     except requests.exceptions.RequestException as e:
         error_msg = f"HTTP request failed for {url}: {e}"
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        return AudioDownloadResponse(
-            success=False,
-            error_message=error_msg
-        ).dict()
+        raise e
+        # return AudioDownloadResponse(
+        #     success=False,
+        #     error_message=error_msg
+        # ), []
     except Exception as e:
         error_msg = f"Unexpected error downloading audio from {url}: {e}"
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        return AudioDownloadResponse(
-            success=False,
-            error_message=error_msg
-        ).dict()
+        raise e
+        # return AudioDownloadResponse(
+        #     success=False,
+        #     error_message=error_msg
+        # ), []
 
 
 @mcp.tool()
