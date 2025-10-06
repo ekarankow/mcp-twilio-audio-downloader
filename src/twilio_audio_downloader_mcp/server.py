@@ -18,7 +18,7 @@ import logging
 import sys
 import base64
 from mcp.server.fastmcp import FastMCP
-from mcp.server import types
+import mcp.types as types
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
