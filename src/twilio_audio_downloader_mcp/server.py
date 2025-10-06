@@ -235,7 +235,7 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
 
         blob = BlobResourceContents(
             uri="file://{0}".format(filename),
-            blob=audio_data,
+            blob=encoded_data,
             mimeType=content_type
         )
 
