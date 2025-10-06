@@ -1,8 +1,11 @@
+#!/usr/bin/env python3
 """
 Twilio Audio Downloader MCP Server
+
 A Model Context Protocol server that downloads audio files from Twilio URLs
 with authentication support and returns them as data streams.
 """
+
 import argparse
 import os
 import tempfile
@@ -14,7 +17,8 @@ import traceback
 import logging
 import sys
 import base64
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
+from mcp.types import BlobResourceContents, EmbeddedResource
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
@@ -31,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Create the MCP server instance
 mcp = FastMCP("Twilio Audio Downloader MCP Server")
+
 
 class TwilioConfig(BaseSettings):
     """Configuration for Twilio authentication and server settings."""
@@ -73,8 +78,10 @@ class TwilioConfig(BaseSettings):
                                 'base_url': base_url_part
                             }
 
+
 # Global configuration
 config = TwilioConfig()
+
 
 class AudioDownloadResponse(BaseModel):
     """Response model for audio download."""
@@ -84,6 +91,7 @@ class AudioDownloadResponse(BaseModel):
     content_type: str = ""
     size_bytes: int = 0
     error_message: str = ""
+
 
 def get_file_extension_from_content_type(content_type: str) -> str:
     """Get appropriate file extension from HTTP Content-Type header."""
@@ -107,6 +115,7 @@ def get_file_extension_from_content_type(content_type: str) -> str:
 
     return extension_map.get(content_type, '.bin')
 
+
 def get_auth_for_url(url: str) -> Optional[tuple]:
     """Get authentication credentials for a given URL."""
     parsed = urlparse(url)
@@ -125,70 +134,130 @@ def get_auth_for_url(url: str) -> Optional[tuple]:
 
     return None
 
+
 @mcp.tool()
 def download_twilio_audio(url: str) -> Dict[str, Any]:
     """
-    Download audio file from Twilio URL with authentication support and return as base64 encoded data.
+    Download audio file from Twilio URL with authentication support.
 
     Args:
-        url: The URL of the audio file to download
+        url (str): Twilio audio URL to download from
 
     Returns:
-        Dictionary containing success status, base64 encoded audio data, filename, content type, and size
-
-    Raises:
-        ValueError: If the URL is invalid or the download fails
+        Dict[str, Any]: Response containing success status, base64 encoded audio data,
+                       filename, content type, size, and error message if failed
     """
-    logger.info(f"Starting audio download from URL: {url}")
-
-    if not url.startswith(('http://', 'https://')):
-        error_msg = "Only HTTP and HTTPS URLs are supported"
-        logger.error(f"{error_msg}. Received URL: {url}")
-        raise ValueError(error_msg)
-
-    parsed_url = urlparse(url)
-    if not parsed_url.netloc:
-        error_msg = f"Invalid URL format: {url}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-    auth = get_auth_for_url(url)
-
     try:
+        logger.info(f"Starting audio download from URL: {url}")
+
+        # Validate URL format
+        if not url.startswith(('http://', 'https://')):
+            error_msg = "Only HTTP and HTTPS URLs are supported"
+            logger.error(f"{error_msg}. Received URL: {url}")
+            return AudioDownloadResponse(
+                success=False,
+                error_message=error_msg
+            ).dict()
+
+        # Validate URL structure
+        try:
+            parsed_url = urlparse(url)
+            if not parsed_url.netloc:
+                error_msg = f"Invalid URL format: {url}"
+                logger.error(error_msg)
+                return AudioDownloadResponse(
+                    success=False,
+                    error_message=error_msg
+                ).dict()
+        except Exception as e:
+            error_msg = f"Failed to parse URL {url}: {e}"
+            logger.error(error_msg)
+            return AudioDownloadResponse(
+                success=False,
+                error_message=error_msg
+            ).dict()
+
+        # Get authentication for this URL
+        auth = get_auth_for_url(url)
+        if auth:
+            logger.info(f"Using authentication for URL: {url}")
+        else:
+            logger.warning(f"No authentication configured for URL: {url}")
+
+        # Download with authentication if available
+        logger.info(f"Initiating HTTP request to: {url}")
         response = requests.get(url, auth=auth, stream=True, timeout=30)
         response.raise_for_status()
+
+        logger.info(f"HTTP response status: {response.status_code}")
+        content_type = response.headers.get('content-type', 'application/octet-stream')
+        content_length = response.headers.get('content-length', 'unknown')
+        logger.info(f"Content type: {content_type}")
+        logger.info(f"Content length: {content_length}")
+
+        # Determine file extension from content type
+        file_extension = get_file_extension_from_content_type(content_type)
+        filename = f"twilio_audio_{parsed_url.path.split('/')[-1]}{file_extension}"
+
+        logger.info(f"Determined filename: {filename}")
+
+        # Read all content into memory
+        audio_data = b""
+        bytes_downloaded = 0
+
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                audio_data += chunk
+                bytes_downloaded += len(chunk)
+
+        logger.info(f"Successfully downloaded {bytes_downloaded} bytes")
+
+        if len(audio_data) == 0:
+            error_msg = "Downloaded file is empty"
+            logger.error(error_msg)
+            return AudioDownloadResponse(
+                success=False,
+                error_message=error_msg
+            ).dict()
+
+        # Encode audio data as base64 for JSON transport
+        encoded_data = base64.b64encode(audio_data).decode('utf-8')
+
+        logger.info(f"Successfully encoded {len(audio_data)} bytes as base64")
+
+        # return AudioDownloadResponse(
+        #     success=True,
+        #     data=encoded_data,
+        #     filename=filename,
+        #     content_type=content_type,
+        #     size_bytes=len(audio_data)
+        # ).dict()
+
+        blob = BlobResourceContents(
+            uri=filename,
+            data=audio_data,
+            mime_type=content_type
+        )
+
+        return EmbeddedResource(resource=blob)
+
     except requests.exceptions.RequestException as e:
-        error_msg = f"HTTP request failed for {url}: {str(e)}"
+        error_msg = f"HTTP request failed for {url}: {e}"
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise ValueError(error_msg)
-
-    content_type = response.headers.get('content-type', 'application/octet-stream')
-    file_extension = get_file_extension_from_content_type(content_type)
-    filename = f"twilio_audio_{parsed_url.path.split('/')[-1]}{file_extension}"
-
-    audio_data = b""
-    for chunk in response.iter_content(chunk_size=8192):
-        if chunk:
-            audio_data += chunk
-
-    if len(audio_data) == 0:
-        error_msg = "Downloaded file is empty"
+        return AudioDownloadResponse(
+            success=False,
+            error_message=error_msg
+        ).dict()
+    except Exception as e:
+        error_msg = f"Unexpected error downloading audio from {url}: {e}"
         logger.error(error_msg)
-        raise ValueError(error_msg)
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return AudioDownloadResponse(
+            success=False,
+            error_message=error_msg
+        ).dict()
 
-    logger.info(f"Successfully downloaded {len(audio_data)} bytes")
-
-    # Encode audio data as base64 for JSON transport
-    encoded_data = base64.b64encode(audio_data).decode('utf-8')
-
-    return {
-        "success": True,
-        "data": encoded_data,
-        "filename": filename,
-        "content_type": content_type,
-        "size_bytes": len(audio_data)
-    }
 
 @mcp.tool()
 def get_server_config() -> Dict[str, Any]:
@@ -209,6 +278,7 @@ def get_server_config() -> Dict[str, Any]:
         "supported_protocols": ["http", "https"],
         "supported_audio_formats": ["wav", "mp3", "m4a", "aac", "ogg", "flac", "webm", "3gp", "amr"]
     }
+
 
 def setup_health_endpoint():
     """Set up health check endpoint for the FastAPI app."""
@@ -232,6 +302,7 @@ def setup_health_endpoint():
     except Exception as e:
         logger.warning(f"Could not set up health endpoint: {e}")
         return None
+
 
 def main():
     """Main entry point for the server."""
@@ -280,6 +351,7 @@ def main():
         port=args.port,
         log_level=config.log_level.lower()
     )
+
 
 if __name__ == "__main__":
     main()
