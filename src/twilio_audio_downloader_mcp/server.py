@@ -136,7 +136,7 @@ def get_auth_for_url(url: str) -> Optional[tuple]:
 
 
 @mcp.tool()
-def download_twilio_audio(url: str) -> Dict[str, Any]:
+def download_twilio_audio(url: str):
     """
     Download audio file from Twilio URL with authentication support.
 
@@ -157,7 +157,7 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
             return AudioDownloadResponse(
                 success=False,
                 error_message=error_msg
-            ).dict()
+            )
 
         # Validate URL structure
         try:
@@ -168,14 +168,14 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
                 return AudioDownloadResponse(
                     success=False,
                     error_message=error_msg
-                ).dict()
+                )
         except Exception as e:
             error_msg = f"Failed to parse URL {url}: {e}"
             logger.error(error_msg)
             return AudioDownloadResponse(
                 success=False,
                 error_message=error_msg
-            ).dict()
+            )
 
         # Get authentication for this URL
         auth = get_auth_for_url(url)
@@ -218,7 +218,7 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
             return AudioDownloadResponse(
                 success=False,
                 error_message=error_msg
-            ).dict()
+            )
 
         # Encode audio data as base64 for JSON transport
         encoded_data = base64.b64encode(audio_data).decode('utf-8')
@@ -242,7 +242,7 @@ def download_twilio_audio(url: str) -> Dict[str, Any]:
         return EmbeddedResource(
             type="resource",
             resource=blob
-        ).dict()
+        )
 
     except requests.exceptions.RequestException as e:
         error_msg = f"HTTP request failed for {url}: {e}"
