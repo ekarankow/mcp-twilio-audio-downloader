@@ -18,6 +18,7 @@ import logging
 import sys
 import base64
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import BlobResourceContents, EmbeddedResource
 from pydantic import BaseModel, FileUrl
 from pydantic_settings import BaseSettings
@@ -35,7 +36,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Create the MCP server instance
-mcp = FastMCP("Twilio Audio Downloader MCP Server")
+mcp = FastMCP("Twilio Audio Downloader MCP Server",
+              transport_security=TransportSecuritySettings(
+                  enable_dns_rebinding_protection=False
+              ))
 
 
 class TwilioConfig(BaseSettings):
